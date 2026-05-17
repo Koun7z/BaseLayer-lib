@@ -1,11 +1,17 @@
 #include <stdio.h>
 #include <stdlib.h>
+
 #include "TestRegistry.h"
+#include "HashMap/HashMap_TestKeys.h"
+
+key_table_t test_keys;
 
 int main()
 {
-    Suite** suites     = tr_get_registered_suites();
-    size_t suite_count = tr_get_registered_suite_count();
+    test_keys = key_table_create(1000, 16, 42);
+
+    Suite** suites     = TR_GetRegisteredSuites();
+    size_t suite_count = TR_GetRegisteredSuiteCount();
 
     SRunner* runner = srunner_create(suites[0]);
     for(size_t i = 1; i < suite_count; i++)
@@ -18,6 +24,7 @@ int main()
     srunner_free(runner);
 
     free(suites);
+    free(test_keys.data);
 
     return (number_failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 }

@@ -7,6 +7,11 @@
  * @brief Implementation of a dynamic array list in C.
  *        The whole idea of this implementation is to have a dynamic array for any type while still allowing the user
  *        to access the array elements directly using the "[]" operator.*
+ * @note  To have access to the array from multiple places you need to store it an "type**", because the "type*" pointer
+ *        will change during list resizing.
+ *        I'm quite conflicted on this design, it seems nice at first but gets more complicated the more you use it. On
+ *        the other hand it retains at least some of the type safety of having normal C array, compared to having to cast
+ *        the void* on access.
  *
  * @details The std_arraylist macro creates and array of requested size and automatically places
  *          a header before the first element of this array, then "returns" a properly typed
@@ -26,6 +31,7 @@ typedef struct
     size_t size;
     size_t element_size;
     size_t header_size;  // including dynamic padding
+    char data[];
 } ArrayList_Header_t;
 
 /**
@@ -33,7 +39,7 @@ typedef struct
  *        Following functions will dynamicly modify this array as needed.
  *        Elements of the array can be accessed directly using the "[]" operator, but you should never modify the
  *        array pointer itself directly.
- *        To change the underlying memory allocation, use the std_arraylist_* functions.
+ *        To change the underlying memory allocation, use the ArrayList_* functions.
  *
  * @param _T   : Any type  - Type of the array elements.
  * @param _size: size_t    - Initial size of the array.
@@ -43,10 +49,10 @@ typedef struct
 #define ArrayList(_T, _size) ((_T*) ArrayList_Create(sizeof(_T), _Alignof(_T), _size))
 
 /**
- * @brief Free the memory previously allocated by std_arraylist macro.
+ * @brief Free the memory previously allocated by ArrayList macro.
  *        _array pointer will be set to NULL after this call.
  *
- * @param _array: any** - Pointer to the array pointer returned by std_arraylist macro.
+ * @param _array: any** - Pointer to the array pointer returned by ArrayList macro.
  */
 #define ArrayList_Free(_array) ArrayList_Destroy((void**) _array)
 

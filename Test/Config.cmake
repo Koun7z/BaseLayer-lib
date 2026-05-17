@@ -7,33 +7,86 @@ pkg_check_modules(CHECK REQUIRED check)
 
 find_package(Threads REQUIRED)
 
-add_executable(test-std
-    ${TEST_DIR}/main.c
-    ${TEST_DIR}/TestRegistry.c
+target_compile_options(base-lib PRIVATE
+    -Wall -Wextra
+    $<$<CONFIG:Debug>:-O0 -g>
+    $<$<CONFIG:Release>:-O3>
+)
+
+target_compile_definitions(base-lib PRIVATE
+    -DTEST_ENV
+)
+
+function(make_test TEST_NAME)
+    add_executable(${TEST_NAME}
+        ${TEST_DIR}/main.c
+        ${TEST_DIR}/TestRegistry.c
+        ${ARGN}
+    )
+
+    target_include_directories(${TEST_NAME} PRIVATE
+        ${TEST_DIR}
+        ${CHECK_INCLUDE_DIRS}
+        ${INC_DIR}
+    )
+
+    target_compile_options(${TEST_NAME} PRIVATE
+        ${CHECK_CFLAGS_OTHER}
+        -Wall -Wextra
+    )
+
+    target_compile_options(${TEST_NAME} PRIVATE
+        $<$<CONFIG:Debug>:-O0 -g>
+        $<$<CONFIG:Release>:-O3>
+    )
+
+    target_link_libraries(${TEST_NAME} PRIVATE
+        base-lib
+        ${CHECK_LIBRARIES}
+        Threads::Threads
+        m
+    )
+
+    target_compile_definitions(${TEST_NAME} PRIVATE
+        -DTEST_NAME=${TEST_NAME}
+        -DTEST_ENV
+    )
+
+    add_test(
+        NAME ${TEST_NAME}
+        COMMAND ${TEST_NAME}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+endfunction()
+
+make_test(test_hash_map
     ${TEST_DIR}/HashMap/HashMap_test.c
 )
 
-set_property(TARGET test-std PROPERTY C_STANDARD 11)
-
-target_include_directories(test-std PRIVATE
-    ${CHECK_INCLUDE_DIRS}
-    ${INC_DIR}/
-    ${TEST_DIR}/
+add_executable(base-bench
+    ${TEST_DIR}/bench_main.c
 )
 
-set(C_FLAGS ${CHECK_CFLAGS_OTHER} -Wall -Wextra -O0 -g -fdiagnostics-color=auto)
+target_include_directories(base-bench PRIVATE
+    ${TEST_DIR}
+    ${CHECK_INCLUDE_DIRS}
+    ${INC_DIR}
+)
 
-target_compile_definitions(std-lib PRIVATE -DTEST_ENV)
+target_compile_options(base-bench PRIVATE
+    ${CHECK_CFLAGS_OTHER}
+    -Wall -Wextra
+    $<$<CONFIG:Debug>:-O0 -g>
+    $<$<CONFIG:Release>:-O3>
+)
 
-target_compile_options(test-std PRIVATE ${C_FLAGS})
-target_compile_options(std-lib PRIVATE ${C_FLAGS})
+target_compile_definitions(base-bench PRIVATE
+    -DTEST_ENV
+)
 
-target_link_libraries(test-std PRIVATE
-    std-lib
+target_link_libraries(base-bench PRIVATE
+    base-lib
     ${CHECK_LIBRARIES}
     Threads::Threads
     m
 )
-
-# Register with CTest
-add_test(NAME test-std COMMAND test-std)

@@ -194,7 +194,7 @@ SpacesInSquareBrackets: false
 Standard: Auto
 
 #Macros
-AttributeMacros: [__capability, __output, __unused]
+AttributeMacros: [__capability, __output, __unused, __weak]
 ForEachMacros: [RANGES_FOR, FOREACH]
 IfMacros: [IF]
 

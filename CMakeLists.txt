@@ -1,23 +1,23 @@
 cmake_minimum_required(VERSION 3.10)
-project(std-lib
+project(base-lib
     LANGUAGES C
 )
 
-add_library(std-lib STATIC)
+add_library(base-lib STATIC)
 
-set_property(TARGET std-lib PROPERTY C_STANDARD 11)
+set_property(TARGET base-lib PROPERTY C_STANDARD 11)
 
 set(LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Lib)
 
 set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Core/Src)
 set(INC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Core/Inc)
 
-target_include_directories(std-lib PUBLIC
+target_include_directories(base-lib PUBLIC
     ${INC_DIR}
     ${LIB_DIR}/SipHash/Inc
 )
 
-target_sources(std-lib PRIVATE
+target_sources(base-lib PRIVATE
     ${SRC_DIR}/Base_ArrayList.c
     ${SRC_DIR}/Base_Hash.c
     ${SRC_DIR}/Base_HashMap.c

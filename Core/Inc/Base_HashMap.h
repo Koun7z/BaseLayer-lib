@@ -36,12 +36,12 @@ typedef struct HashMap_t
 {
     size_t count;
     size_t capacity;
-    size_t seed[2];
-    HashMapEntry** buckets;
 
     HashMapEntry* head_entry;
     HashMapEntry* tail_entry;
 
+    HashMapEntry** _buckets;
+    size_t _seed[2];
     size_t _keyAlignment;
     size_t _valueAlignment;
     float _maxLoadFactor;
@@ -51,23 +51,27 @@ typedef struct HashMap_t
 
 #define HashMap(_keyT, _valueT, _size) HashMap_Create(_size, alignof(_keyT), alignof(_valueT));
 
-#define HashMap_Insert(_keyT, _valueT, _map, _key, _value)                     \
-    HashMap_InsertElement(_map, _key, sizeof(_keyT), &_value, sizeof(_valueT))
-#define HashMap_InsertArray(_keyT, _valueT, _map, _key, _value, _count)                 \
-    HashMap_InsertElement(_map, &_key, sizeof(_keyT), _value, sizeof(_valueT) * _count)
+// Son: Mom can we get a for each loop?
+// Mom: No, we have a for each loop at home.
+// For each loop at home:
+#define HASHMAP_FOREACH(_e, _map)                                                               \
+    for(HashMapEntry * (_e) = (_map) ? (_map)->head_entry : NULL; (_e); (_e) = (_e)->next_iter)
 
-#define HashMap_Find(_keyT, _valueT, _map, _key) ((valueT*) HashMap_FindElement(_map, &_key, sizeof(_keyT)))
-
+#define HASHMAP_FOREACH_REV(_e, _map)                                                           \
+    for(HashMapEntry * (_e) = (_map) ? (_map)->tail_entry : NULL; (_e); (_e) = (_e)->prev_iter)
 
 HashMap_t* HashMap_Create(size_t size, size_t keyAlignment, size_t valueAlignment);
 
-HashMapEntry* HashMap_InsertElement(HashMap_t* map,
-                                    const void* key,
-                                    size_t keySize,
-                                    const void* value,
-                                    size_t valueSize);
+void HashMap_Destroy(HashMap_t* map);
 
-HashMapEntry* HashMap_FindElement(const HashMap_t* map, const void* key, size_t keySize);
+HashMapEntry* HashMap_InsertFrom(HashMap_t* map, const void* key, size_t keySize, const void* value, size_t valueSize);
+
+static inline HashMapEntry* HashMap_InsertPointer(HashMap_t* map, const void* key, size_t keySize, const void* value)
+{
+    return HashMap_InsertFrom(map, key, keySize, &value, sizeof(void*));
+}
+
+HashMapEntry* HashMap_Find(const HashMap_t* map, const void* key, size_t keySize);
 
 void HashMap_RemoveElement(HashMap_t* map, const void* key, size_t keySize);
 
@@ -101,5 +105,7 @@ static inline void* HashMapEntry_GetValue(const HashMapEntry* entry)
 {
     return (void*) (entry->data + entry->_valueOffset);
 }
+
+#define HashMapEntry_GetValueAs(_valueT, _entry) ((_valueT*) HashMapEntry_GetValue(_entry))
 
 #endif  // STD_HASHMAP_H__

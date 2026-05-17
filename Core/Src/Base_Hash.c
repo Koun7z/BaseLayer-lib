@@ -18,8 +18,8 @@ uint32_t Hash_Murmur3_u32(const void* key, size_t len, uint32_t seed)
 
     uint32_t h = seed;
 
-    const uint32_t c1 = 0xcc9e2d51;
-    const uint32_t c2 = 0x1b873593;
+    const uint32_t c1 = UINT32_C(0xcc9e2d51);
+    const uint32_t c2 = UINT32_C(0x1b873593);
 
     const uint32_t* blocks = (const uint32_t*) (data + nblocks * 4);
     for(int i = -nblocks; i; i++)
@@ -32,7 +32,7 @@ uint32_t Hash_Murmur3_u32(const void* key, size_t len, uint32_t seed)
 
         h ^= k;
         h  = rotl32(h, 13);
-        h  = h * 5 + 0xe6546b64;
+        h  = h * 5 + UINT32_C(0xe6546b64);
     }
 
     const uint8_t* tail = data + nblocks * 4;
@@ -42,8 +42,10 @@ uint32_t Hash_Murmur3_u32(const void* key, size_t len, uint32_t seed)
     {
         case 3:
             k1 ^= tail[2] << 16;
+            /* fallthrough */
         case 2:
             k1 ^= tail[1] << 8;
+            /* fallthrough */
         case 1:
             k1 ^= tail[0];
             k1 *= c1;
@@ -52,12 +54,11 @@ uint32_t Hash_Murmur3_u32(const void* key, size_t len, uint32_t seed)
             h  ^= k1;
     }
 
-    /* finalization */
     h ^= len;
     h ^= h >> 16;
-    h *= 0x85ebca6b;
+    h *= UINT32_C(0x85ebca6b);
     h ^= h >> 13;
-    h *= 0xc2b2ae35;
+    h *= UINT32_C(0xc2b2ae35);
     h ^= h >> 16;
 
     return h;
@@ -86,7 +87,7 @@ uint64_t Hash_Murmur3_u64(const void* key, size_t len, uint64_t seed)
         h1 ^= k1;
         h1  = rotl64(h1, 27);
         h1 += h2;
-        h1  = h1 * 5 + 0x52dce729;
+        h1  = h1 * 5 + UINT64_C(0x52dce729);
 
         k2 *= c2;
         k2  = rotl64(k2, 33);
@@ -94,7 +95,7 @@ uint64_t Hash_Murmur3_u64(const void* key, size_t len, uint64_t seed)
         h2 ^= k2;
         h2  = rotl64(h2, 31);
         h2 += h1;
-        h2  = h2 * 5 + 0x38495ab5;
+        h2  = h2 * 5 + UINT64_C(0x38495ab5);
     }
 
     const uint8_t* tail = data + nblocks * 16;
@@ -105,36 +106,50 @@ uint64_t Hash_Murmur3_u64(const void* key, size_t len, uint64_t seed)
     {
         case 15:
             k2 ^= (uint64_t) tail[14] << 48;
+            /* fall through */
         case 14:
             k2 ^= (uint64_t) tail[13] << 40;
+            /* fall through */
         case 13:
             k2 ^= (uint64_t) tail[12] << 32;
+            /* fall through */
         case 12:
             k2 ^= (uint64_t) tail[11] << 24;
+            /* fall through */
         case 11:
             k2 ^= (uint64_t) tail[10] << 16;
+            /* fall through */
         case 10:
             k2 ^= (uint64_t) tail[9] << 8;
+            /* fall through */
         case 9:
             k2 ^= (uint64_t) tail[8];
             k2 *= c2;
             k2  = rotl64(k2, 33);
             k2 *= c1;
             h2 ^= k2;
+            /* fall through */
         case 8:
             k1 ^= (uint64_t) tail[7] << 56;
+            /* fall through */
         case 7:
             k1 ^= (uint64_t) tail[6] << 48;
+            /* fall through */
         case 6:
             k1 ^= (uint64_t) tail[5] << 40;
+            /* fall through */
         case 5:
             k1 ^= (uint64_t) tail[4] << 32;
+            /* fall through */
         case 4:
             k1 ^= (uint64_t) tail[3] << 24;
+            /* fall through */
         case 3:
             k1 ^= (uint64_t) tail[2] << 16;
+            /* fall through */
         case 2:
             k1 ^= (uint64_t) tail[1] << 8;
+            /* fall through */
         case 1:
             k1 ^= (uint64_t) tail[0];
             k1 *= c1;
@@ -149,10 +164,10 @@ uint64_t Hash_Murmur3_u64(const void* key, size_t len, uint64_t seed)
     h2 += h1;
 
     h1 ^= h1 >> 33;
-    h1 *= 0xff51afd7ed558ccdULL;
+    h1 *= UINT64_C(0xff51afd7ed558ccd);
     h1 ^= h1 >> 33;
     h2 ^= h2 >> 33;
-    h2 *= 0xc4ceb9fe1a85ec53ULL;
+    h2 *= UINT64_C(0xc4ceb9fe1a85ec53);
     h2 ^= h2 >> 33;
 
     h1 += h2;
@@ -170,20 +185,12 @@ uint64_t __attribute__((weak)) Hash_GetSeed()
 #endif
 }
 
-static inline uint64_t splitmix64(uint64_t* x)
-{
-    uint64_t z = (*x += UINT64_C(0x9e3779b97f4a7c15));
-    z          = (z ^ (z >> 30)) * UINT64_C(0xbf58476d1ce4e5b9);
-    z          = (z ^ (z >> 27)) * UINT64_C(0x94d049bb133111eb);
-    return z ^ (z >> 31);
-}
-
 void Hash_SipHash_Init_u64(uint64_t* k0, uint64_t* k1)
 {
     uint64_t seed = Hash_GetSeed();
 
-    *k0 = splitmix64(&seed);
-    *k1 = splitmix64(&seed);
+    *k0 = Hash_SplitMix64(seed);
+    *k1 = Hash_SplitMix64(seed);
 }
 
 
@@ -191,8 +198,8 @@ void Hash_SipHash_Init_u32(uint32_t* k0, uint32_t* k1)
 {
     uint64_t seed = Hash_GetSeed();
 
-    uint64_t x0 = splitmix64(&seed);
-    uint64_t x1 = splitmix64(&seed);
+    uint64_t x0 = Hash_SplitMix64(seed);
+    uint64_t x1 = Hash_SplitMix64(seed);
 
     *k0 = (uint32_t) (x0 ^ (x0 >> 32));
     *k1 = (uint32_t) (x1 ^ (x1 >> 32));

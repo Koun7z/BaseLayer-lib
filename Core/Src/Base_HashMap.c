@@ -144,13 +144,16 @@ HashMap_t* HashMap_Create(size_t size, size_t keyAlignment, size_t valueAlignmen
         return NULL;
     }
 
-    map->buckets = calloc(size, sizeof(HashMapEntry*));
-    if(!map->buckets)
+    map->_buckets = calloc(size, sizeof(HashMapEntry*));
+    if(!map->_buckets)
     {
         free(map);
         return NULL;
     }
 
+    map->count           = 0;
+    map->head_entry      = NULL;
+    map->tail_entry      = NULL;
     map->capacity        = size;
     map->_maxLoadFactor  = HASH_MAP_DEFAULT_MAX_LOAD_FACTOR;
     map->_minLoadFactor  = HASH_MAP_DEFAULT_MIN_LOAD_FACTOR;
@@ -158,7 +161,7 @@ HashMap_t* HashMap_Create(size_t size, size_t keyAlignment, size_t valueAlignmen
     map->_valueAlignment = valueAlignment;
 
 #if HASH_MAP_HASH_FUNCTION != 0
-    Hash_SipHash_Init(&map->seed[0], &map->seed[1]);
+    Hash_SipHash_Init(&map->_seed[0], &map->_seed[1]);
 #endif
 
     return map;
@@ -166,20 +169,24 @@ HashMap_t* HashMap_Create(size_t size, size_t keyAlignment, size_t valueAlignmen
 
 void HashMap_Destroy(HashMap_t* map)
 {
-    if(!map)
+    assert(map);
+
+    HashMapEntry* e = map->head_entry;
+    while(e)
     {
-        return;
+        HashMapEntry* next = e->next_iter;
+        free(e);
+        e = next;
     }
 
-    free(map->buckets);
+    if(map->_buckets)
+    {
+        free(map->_buckets);
+    }
     free(map);
 }
 
-HashMapEntry* HashMap_InsertElement(HashMap_t* map,
-                                    const void* key,
-                                    size_t keySize,
-                                    const void* value,
-                                    size_t valueSize)
+HashMapEntry* HashMap_InsertFrom(HashMap_t* map, const void* key, size_t keySize, const void* value, size_t valueSize)
 {
     const float load = HashMap_GetLoadFactor(map);
     if(load > map->_maxLoadFactor)
@@ -190,7 +197,7 @@ HashMapEntry* HashMap_InsertElement(HashMap_t* map,
         }
     }
 
-    const size_t hash       = HashMap_GetHash(key, keySize, map->seed);
+    const size_t hash       = HashMap_GetHash(key, keySize, map->_seed);
     const size_t bucket_idx = hash & (map->capacity - 1);
 
     if(map->head_entry == NULL)
@@ -204,15 +211,15 @@ HashMapEntry* HashMap_InsertElement(HashMap_t* map,
         mempcpy(entry->data + entry->_keyOffset, key, keySize);
         mempcpy(entry->data + entry->_valueOffset, value, valueSize);
 
-        map->head_entry          = entry;
-        map->tail_entry          = entry;
-        map->buckets[bucket_idx] = entry;
+        map->head_entry           = entry;
+        map->tail_entry           = entry;
+        map->_buckets[bucket_idx] = entry;
         map->count++;
 
         return entry;
     }
 
-    HashMapEntry* bucket_head = map->buckets[bucket_idx];
+    HashMapEntry* bucket_head = map->_buckets[bucket_idx];
     if(bucket_head == NULL)
     {
         HashMapEntry* entry = alloc_entry_aligned(keySize, valueSize, map->_keyAlignment, map->_valueAlignment);
@@ -225,7 +232,7 @@ HashMapEntry* HashMap_InsertElement(HashMap_t* map,
         mempcpy(entry->data + entry->_valueOffset, value, valueSize);
 
         update_tail_entry(map, entry);
-        map->buckets[bucket_idx] = entry;
+        map->_buckets[bucket_idx] = entry;
         map->count++;
 
         return entry;
@@ -254,6 +261,7 @@ HashMapEntry* HashMap_InsertElement(HashMap_t* map,
             }
             return new_entry;
         }
+        e = e->next_in_bucket;
     }
 
     new_entry = alloc_entry_aligned(keySize, valueSize, map->_keyAlignment, map->_valueAlignment);
@@ -288,17 +296,18 @@ int HashMap_Resize(HashMap_t* map, size_t newSize)
     {
         return -1;
     }
-    free(map->buckets);
+    free(map->_buckets);
 
-    map->buckets  = new_buckets;
+    map->_buckets = new_buckets;
     map->capacity = newSize;
 
     HashMapEntry* e = map->head_entry;
     while(e)
     {
-        const size_t hash       = HashMap_GetHash(HashMapEntry_GetKey(e), e->_keySize, map->seed);
+        const size_t hash       = HashMap_GetHash(HashMapEntry_GetKey(e), e->_keySize, map->_seed);
         const size_t bucket_idx = hash & (newSize - 1);
 
+        e->next_in_bucket = NULL;
         if(new_buckets[bucket_idx] == NULL)
         {
             new_buckets[bucket_idx] = e;
@@ -314,12 +323,12 @@ int HashMap_Resize(HashMap_t* map, size_t newSize)
     return 0;
 }
 
-HashMapEntry* HashMap_FindElement(const HashMap_t* map, const void* key, size_t keySize)
+HashMapEntry* HashMap_Find(const HashMap_t* map, const void* key, size_t keySize)
 {
-    const size_t hash       = HashMap_GetHash(key, keySize, map->seed);
+    const size_t hash       = HashMap_GetHash(key, keySize, map->_seed);
     const size_t bucket_idx = hash & (map->capacity - 1);
 
-    HashMapEntry* e = map->buckets[bucket_idx];
+    HashMapEntry* e = map->_buckets[bucket_idx];
     while(e)
     {
         if(HashMapEntry_CompareKey(e, key, keySize) == 0)
@@ -360,21 +369,23 @@ void HashMap_RemoveElement(HashMap_t* map, const void* key, size_t keySize)
         HashMap_Resize(map, map->capacity / 2);
     }
 
-    const size_t hash       = HashMap_GetHash(key, keySize, map->seed);
+    const size_t hash       = HashMap_GetHash(key, keySize, map->_seed);
     const size_t bucket_idx = hash & (map->capacity - 1);
 
-    HashMapEntry* e = map->buckets[bucket_idx];
-    if(e)
+    HashMapEntry* e = map->_buckets[bucket_idx];
+    if(e == NULL)
     {
-        if(HashMapEntry_CompareKey(e, key, keySize) == 0)
-        {
-            map->buckets[bucket_idx] = e->next_in_bucket;
-            remove_from_iter(map, e);
+        return;
+    }
 
-            free(e);
-            map->count--;
-            return;
-        }
+    if(HashMapEntry_CompareKey(e, key, keySize) == 0)
+    {
+        map->_buckets[bucket_idx] = e->next_in_bucket;
+        remove_from_iter(map, e);
+
+        free(e);
+        map->count--;
+        return;
     }
     while(e->next_in_bucket)
     {
@@ -389,5 +400,7 @@ void HashMap_RemoveElement(HashMap_t* map, const void* key, size_t keySize)
             map->count--;
             return;
         }
+
+        e = e->next_in_bucket;
     }
 }

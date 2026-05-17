@@ -12,10 +12,20 @@ typedef enum
     HASH_FUNCTION_SIPHASH = 2
 } HashFunction_t;
 
+
+static inline size_t Hash_SplitMix64(uint64_t x)
+{
+    x += UINT64_C(0x9e3779b97f4a7c15);
+    x  = (x ^ (x >> 30)) * UINT64_C(0xbf58476d1ce4e5b9);
+    x  = (x ^ (x >> 27)) * UINT64_C(0x94d049bb133111eb);
+    x  = x ^ (x >> 31);
+    return x;
+}
+
 static inline uint32_t Hash_FNV1a_u32(const void* data, size_t size)
 {
-    uint32_t hash        = 0x811c9dc5U;
-    const uint32_t prime = 0x1000193U;
+    uint32_t hash        = UINT32_C(0x811c9dc5);
+    const uint32_t prime = UINT32_C(0x1000193);
 
     const unsigned char* p = data;
     for(size_t i = 0; i < size; i++)
@@ -29,8 +39,8 @@ static inline uint32_t Hash_FNV1a_u32(const void* data, size_t size)
 
 static inline uint64_t Hash_FNV1a_u64(const void* data, size_t size)
 {
-    uint64_t hash        = 0xcbf29ce484222325ULL;
-    const uint64_t prime = 0x100000001b3ULL;
+    uint64_t hash        = UINT64_C(0xcbf29ce484222325);
+    const uint64_t prime = UINT64_C(0x100000001b3);
 
     const unsigned char* p = data;
     for(size_t i = 0; i < size; i++)

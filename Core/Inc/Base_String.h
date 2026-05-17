@@ -1,7 +1,7 @@
 #ifndef BASE_STRING_H__
 #define BASE_STRING_H__
 
-#include "Base_ArrayList.h"
+#include "Base_HashMap.h"
 
 #include <stdlib.h>
 #include <stddef.h>
@@ -18,33 +18,25 @@ typedef struct
 
 #define String(str) String_Create(str, sizeof(str))
 
-#define String_GetHeader(str) ((StringHeader_t*) (str - sizeof(StringHeader_t)))
-#define String_Length(str)    (String_GetHeader(str)->length)
-
 // clang-format off
 
-#define ConstString(str)                                        \
-    ((const char*)(&(struct {                                   \
-        StringHeader_t h;                                       \
-        char d[sizeof(str)];                                    \
-    }) {                                                        \
-        .h = {                                                  \
-            .length        = sizeof(str),                       \
-            .capacity         = sizeof(str),                    \
-        },                                                      \
-        .d = str                                                \
+#define ConstString(str)                     \
+    ((const char*)(&(struct {                \
+        StringHeader_t h;                    \
+        char d[sizeof(str)];                 \
+    }) {                                     \
+        .h = {                               \
+            .length        = sizeof(str),    \
+            .capacity      = sizeof(str),    \
+        },                                   \
+        .d = str                             \
     }.d))
 
 // clang-format on
 
-#define StringMap(_T, _size) HashMap(char, _T, _size)
-#define StringMap_Insert(_map, _key, _value, _size)                                      \
-    HashMap_InsertElement(_map, _key, sizeof(char) * (strlen(_key) + 1), &_value, _size)
-
-#define StringMap_InsertArray(_valueT, _map, _key, _value, _count)                                         \
-    HashMap_InsertElement(_map, _key, sizeof(char) * (strlen(_key) + 1), _value, sizeof(_valueT) * _count)
-
-#define StringMap_Find(_map, _key) HashMap_FindElement(_map, _key, strlen(_key) + 1)
+/*
+** Base string manipulation functions.
+*/
 
 static inline String_t String_Create(const char* str, size_t length)
 {
@@ -57,6 +49,36 @@ static inline String_t String_Create(const char* str, size_t length)
         return buff->data;
     }
     return NULL;
+}
+
+static inline StringHeader_t* String_GetHeader(const char* str)
+{
+    return (StringHeader_t*) (str - offsetof(StringHeader_t, data));
+}
+
+/**
+ * @brief Return the length of a string created by String_Create(), String() or ConstString()
+ * @note  This length does not include the null terminator, even though it is included in every String_t instance.
+ *
+ * @param str
+ * @return size_t
+ */
+static inline size_t String_Length(const char* str)
+{
+    return String_GetHeader(str)->length;
+}
+
+static inline char* String_Copy(const char* str)
+{
+    StringHeader_t* new_str = (StringHeader_t*) malloc(sizeof(StringHeader_t) + String_Length(str));
+    if(new_str == NULL)
+    {
+        return NULL;
+    }
+    StringHeader_t* old_header = String_GetHeader(str);
+
+    memcpy(new_str, old_header, sizeof(StringHeader_t) + old_header->length);
+    return new_str->data;
 }
 
 static inline void String_Destroy(String_t* str)
@@ -73,7 +95,45 @@ static inline void String_Destroy(String_t* str)
 
 static inline void String_Clear(String_t str)
 {
-    ArrayList_ClearList(str);
+    StringHeader_t* header = String_GetHeader(str);
+
+    header->length = 0;
+}
+
+
+// String map
+#define StringMap(_T, _size) HashMap(char, _T, _size)
+
+/*
+** Hash map helpers for c string keys
+*/
+
+#define CStringMap_InsertFrom(_map, _key, _value, _size)             \
+    HashMap_InsertFrom(_map, _key, strlen(_key) + 1, &_value, _size)
+
+#define CStringMap_InsertPointer(_map, _key, _ptr) HashMap_InsertPointer(_map, _key, strlen(_key) + 1, _ptr)
+
+#define CStringMap_Find(_map, _key) HashMap_Find(_map, _key, strlen(_key) + 1)
+
+/*
+** Hash map helpers for String_t keys
+** Warning: Using those functions for c string not created by String_Create(), String() or ConstString()
+** will cause undefined behavior since they expect a StringHeader_t before the string data.
+*/
+
+static inline HashMapEntry* FullStringMap_InsertFrom(HashMap_t* map, char* key, const void* value, size_t valueSize)
+{
+    return HashMap_InsertFrom(map, key, String_Length(key) + 1, &value, valueSize);
+}
+
+static inline HashMapEntry* FullStringMap_InsertPointer(HashMap_t* map, char* key, const void* value)
+{
+    return HashMap_InsertPointer(map, key, String_Length(key) + 1, value);
+}
+
+static inline HashMapEntry* FullStringMap_Find(const HashMap_t* map, char* key)
+{
+    return HashMap_Find(map, key, String_Length(key) + 1);
 }
 
 #endif /* BASE_STRING_H__ */

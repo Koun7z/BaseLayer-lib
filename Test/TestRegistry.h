@@ -7,9 +7,9 @@
 extern "C" {
 #endif
 
-void tr_add_test(const char* tsuite, const char* tcase, const TTest* tf);
-Suite** tr_get_registered_suites(void);
-size_t tr_get_registered_suite_count(void);
+void TR_AddTest(const char* tsuite, const char* tcase, const TTest* tf);
+Suite** TR_GetRegisteredSuites(void);
+size_t TR_GetRegisteredSuiteCount(void);
 
 #if defined(__cplusplus)
 }
