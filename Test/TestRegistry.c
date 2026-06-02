@@ -55,12 +55,10 @@ Suite** TR_GetRegisteredSuites(void)
     size_t count   = TR_GetRegisteredSuiteCount();
     Suite** suites = (Suite**) malloc(sizeof(Suite*) * count);
 
-    size_t i        = 0;
-    HashMapEntry* e = suite_registry->head_entry;
-    while(e)
+    size_t i = 0;
+    HASHMAP_FOREACH(e, suite_registry)
     {
         suites[i++] = *HashMapEntry_GetValueAs(Suite*, e);
-        e           = e->next_iter;
     }
     return suites;
 }

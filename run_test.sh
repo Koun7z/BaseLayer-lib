@@ -105,12 +105,8 @@ fi
 if [[ "$RUN_BENCH" == true ]]; then
   log_info "Running benchmarks."
   BUILD_TYPE="Release"
-fi
 
-if [[ "$RUN_BENCH" == true ]]; then
-  log_info "Running benchmarks."
-
-  "./build/${BUILD_TYPE}/dsp-bench"
+  "./build/${BUILD_TYPE}/base-bench"
 
   exit "$?"
 fi

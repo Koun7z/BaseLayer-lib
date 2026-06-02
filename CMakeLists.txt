@@ -18,6 +18,7 @@ target_include_directories(base-lib PUBLIC
 )
 
 target_sources(base-lib PRIVATE
+    ${SRC_DIR}/Base_CArrayList.c
     ${SRC_DIR}/Base_ArrayList.c
     ${SRC_DIR}/Base_Hash.c
     ${SRC_DIR}/Base_HashMap.c

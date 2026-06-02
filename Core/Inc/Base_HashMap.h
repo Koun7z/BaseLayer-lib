@@ -42,10 +42,10 @@ typedef struct HashMap_t
 
     HashMapEntry** _buckets;
     size_t _seed[2];
-    size_t _keyAlignment;
-    size_t _valueAlignment;
-    float _maxLoadFactor;
-    float _minLoadFactor;
+    size_t _key_alignment;
+    size_t _value_alignment;
+    float _max_load_actor;
+    float _min_load_factor;
 } HashMap_t;
 
 

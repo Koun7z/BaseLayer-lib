@@ -102,7 +102,8 @@ static inline HashMapEntry* replace_entry_data(HashMap_t* map,
     }
     else
     {
-        new_entry = alloc_entry_aligned(old_entry->_keySize, new_value_size, map->_keyAlignment, map->_valueAlignment);
+        new_entry = alloc_entry_aligned(old_entry->_keySize, new_value_size, map->_key_alignment,
+                                        map->_value_alignment);
         if(!new_entry)
         {
             return NULL;
@@ -151,14 +152,14 @@ HashMap_t* HashMap_Create(size_t size, size_t keyAlignment, size_t valueAlignmen
         return NULL;
     }
 
-    map->count           = 0;
-    map->head_entry      = NULL;
-    map->tail_entry      = NULL;
-    map->capacity        = size;
-    map->_maxLoadFactor  = HASH_MAP_DEFAULT_MAX_LOAD_FACTOR;
-    map->_minLoadFactor  = HASH_MAP_DEFAULT_MIN_LOAD_FACTOR;
-    map->_keyAlignment   = keyAlignment;
-    map->_valueAlignment = valueAlignment;
+    map->count            = 0;
+    map->head_entry       = NULL;
+    map->tail_entry       = NULL;
+    map->capacity         = size;
+    map->_max_load_actor  = HASH_MAP_DEFAULT_MAX_LOAD_FACTOR;
+    map->_min_load_factor = HASH_MAP_DEFAULT_MIN_LOAD_FACTOR;
+    map->_key_alignment   = keyAlignment;
+    map->_value_alignment = valueAlignment;
 
 #if HASH_MAP_HASH_FUNCTION != 0
     Hash_SipHash_Init(&map->_seed[0], &map->_seed[1]);
@@ -189,7 +190,7 @@ void HashMap_Destroy(HashMap_t* map)
 HashMapEntry* HashMap_InsertFrom(HashMap_t* map, const void* key, size_t keySize, const void* value, size_t valueSize)
 {
     const float load = HashMap_GetLoadFactor(map);
-    if(load > map->_maxLoadFactor)
+    if(load > map->_max_load_actor)
     {
         if(HashMap_Expand(map))
         {
@@ -202,7 +203,7 @@ HashMapEntry* HashMap_InsertFrom(HashMap_t* map, const void* key, size_t keySize
 
     if(map->head_entry == NULL)
     {
-        HashMapEntry* entry = alloc_entry_aligned(keySize, valueSize, map->_keyAlignment, map->_valueAlignment);
+        HashMapEntry* entry = alloc_entry_aligned(keySize, valueSize, map->_key_alignment, map->_value_alignment);
         if(!entry)
         {
             return NULL;
@@ -222,7 +223,7 @@ HashMapEntry* HashMap_InsertFrom(HashMap_t* map, const void* key, size_t keySize
     HashMapEntry* bucket_head = map->_buckets[bucket_idx];
     if(bucket_head == NULL)
     {
-        HashMapEntry* entry = alloc_entry_aligned(keySize, valueSize, map->_keyAlignment, map->_valueAlignment);
+        HashMapEntry* entry = alloc_entry_aligned(keySize, valueSize, map->_key_alignment, map->_value_alignment);
         if(!entry)
         {
             return NULL;
@@ -264,7 +265,7 @@ HashMapEntry* HashMap_InsertFrom(HashMap_t* map, const void* key, size_t keySize
         e = e->next_in_bucket;
     }
 
-    new_entry = alloc_entry_aligned(keySize, valueSize, map->_keyAlignment, map->_valueAlignment);
+    new_entry = alloc_entry_aligned(keySize, valueSize, map->_key_alignment, map->_value_alignment);
     if(!new_entry)
     {
         return NULL;
@@ -364,7 +365,7 @@ static inline void remove_from_iter(HashMap_t* map, HashMapEntry* e)
 
 void HashMap_RemoveElement(HashMap_t* map, const void* key, size_t keySize)
 {
-    if(map->capacity > HASH_MAP_MIN_SIZE && HashMap_GetLoadFactor(map) < map->_minLoadFactor)
+    if(map->capacity > HASH_MAP_MIN_SIZE && HashMap_GetLoadFactor(map) < map->_min_load_factor)
     {
         HashMap_Resize(map, map->capacity / 2);
     }
