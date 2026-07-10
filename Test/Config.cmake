@@ -67,6 +67,10 @@ make_test(test_carray_list
     ${TEST_DIR}/ArrayList/CArrayList_test.c
 )
 
+make_test(test_array_list
+    ${TEST_DIR}/ArrayList/ArrayList_test.c
+)
+
 add_executable(base-bench
     ${TEST_DIR}/bench_main.c
 )
