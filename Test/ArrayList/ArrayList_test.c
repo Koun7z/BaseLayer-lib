@@ -5,7 +5,7 @@
 
 START_TEST(Append_test)
 {
-    ArrayList_t* list = ArrayList(size_t, 16);
+    ArrayList_t* list = ArrayList(size_t);
     for(size_t i = 0; i < 100; i++)
     {
         int s = ArrayList_Append(list, &i);
@@ -104,17 +104,17 @@ START_TEST(Reserve_test)
     ArrayList_t* list = ArrayList(size_t, 16);
     int s             = ArrayList_Reserve(list, 100);
     ck_assert(s == 0);
-    ck_assert(list->capacity == 100);
+    ck_assert(list->capacity == 116);
 
     ArrayList_Destroy(list);
 }
 
-START_TEST(Expand_test)
+START_TEST(Realloc_test)
 {
     ArrayList_t* list = ArrayList(size_t, 16);
     int s             = ArrayList_Realloc(list, 100);
     ck_assert(s == 0);
-    ck_assert(list->capacity == 116);
+    ck_assert(list->capacity == 100);
 
     ArrayList_Destroy(list);
 }
@@ -165,6 +165,6 @@ __attribute__((constructor)) void register_carraylist_suite(void)
     TR_AddTest("ArrayList", "Core", Insert_test);
     TR_AddTest("ArrayList", "Core", InsertRange_test);
     TR_AddTest("ArrayList", "Core", Reserve_test);
-    TR_AddTest("ArrayList", "Core", Expand_test);
+    TR_AddTest("ArrayList", "Core", Realloc_test);
     TR_AddTest("ArrayList", "Core", Remove_test);
 }

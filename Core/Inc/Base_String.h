@@ -102,7 +102,7 @@ static inline void String_Clear(String_t str)
 
 
 // String map
-#define StringMap(_T, _size) HashMap(char, _T, _size)
+#define StringMap(_size) HashMap(_size)
 
 /*
 ** Hash map helpers for c string keys

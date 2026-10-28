@@ -9,9 +9,10 @@ typedef enum
 {
     HASH_FUNCTION_FNV1A   = 0,
     HASH_FUNCTION_MURMUR3 = 1,
-    HASH_FUNCTION_SIPHASH = 2
-} HashFunction_t;
+    HASH_FUNCTION_SIPHASH = 2,
+} HashFunctionType;
 
+typedef size_t (*HashFunc_t)(const void* data, size_t size, const size_t seed[2]);
 
 static inline size_t Hash_SplitMix64(uint64_t x)
 {
@@ -31,7 +32,7 @@ static inline uint32_t Hash_FNV1a_u32(const void* data, size_t size)
     for(size_t i = 0; i < size; i++)
     {
         hash ^= (uint32_t) p[i];
-        hash *= (prime);
+        hash *= prime;
     }
 
     return hash;
@@ -46,7 +47,7 @@ static inline uint64_t Hash_FNV1a_u64(const void* data, size_t size)
     for(size_t i = 0; i < size; i++)
     {
         hash ^= (uint64_t) p[i];
-        hash *= (prime);
+        hash *= prime;
     }
 
     return hash;

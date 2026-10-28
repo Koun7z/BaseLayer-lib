@@ -5,7 +5,8 @@
 ** Array list configuration
 */
 
-#define ARRAY_LIST_MIN_EXPAND_SIZE 16
+#define ARRAY_LIST_DEFAULT_INITIAL_CAPACITY 16
+#define ARRAY_LIST_MIN_EXPAND_SIZE          16
 
 /*
 ** Hash map configuration

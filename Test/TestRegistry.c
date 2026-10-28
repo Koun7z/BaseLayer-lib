@@ -13,12 +13,12 @@ void TR_AddTest(const char* tsuite, const char* tcase, const TTest* tf)
 {
     if(suite_registry == NULL)
     {
-        suite_registry = StringMap(Suite*, 16);
+        suite_registry = StringMap(16);
     }
 
     if(tcase_registry == NULL)
     {
-        tcase_registry = StringMap(TCase*, 16);
+        tcase_registry = StringMap(16);
     }
 
     HashMapEntry* s_entry = CStringMap_Find(suite_registry, tsuite);

@@ -1,6 +1,10 @@
 #ifndef ArrayList_H__
 #define ArrayList_H__
 
+#include "Base_Allocator.h"
+#include "Base_Macros.h"
+#include "Base_Config.h"
+
 #include <stddef.h>
 #include <stdalign.h>
 #include <assert.h>
@@ -10,11 +14,18 @@ typedef struct
     size_t count;
     size_t capacity;
     size_t _element_size;
-    size_t _element_alignment;
+    const Allocator_t* _allocator;
     void* _data;
 } ArrayList_t;
 
-#define ArrayList(_T, _size) (ArrayList_Create(sizeof(_T), alignof(_T), _size))
+#define ARRAYLIST_DEFAULT_CONSTRUCTOR(_T)                                                          \
+    ArrayList_Create(sizeof(_T), ARRAY_LIST_DEFAULT_INITIAL_CAPACITY, Alloc_GetDefaultAllocator())
+#define ARRAYLIST_INITIAL_SIZE(_T, _n)         ArrayList_Create(sizeof(_T), (_n), Alloc_GetDefaultAllocator())
+#define ARRAYLIST_CUSTOM_ALLOC(_T, _n, _alloc) ArrayList_Create(sizeof(_T), (_n), (_alloc))
+
+#define ArrayList(...)                                                                   \
+    SELECT_PARAM_SET_1_TO_3(__VA_ARGS__, ARRAYLIST_CUSTOM_ALLOC, ARRAYLIST_INITIAL_SIZE, \
+                            ARRAYLIST_DEFAULT_CONSTRUCTOR)(__VA_ARGS__)
 
 /**
  * @brief Gets the VALUE of the element at the specified index in the array list.
@@ -24,7 +35,9 @@ typedef struct
 
 #define ArrayList_CArray(_T, list) ((_T*) ((list)->_data))
 
-ArrayList_t* ArrayList_Create(size_t elementSize, size_t element_alignment, size_t initialCapacity);
+ArrayList_t* ArrayList_Create(size_t elementSize, size_t initialCapacity, const Allocator_t* alloc);
+
+int ArrayList_Init(ArrayList_t* list, size_t elementSize, size_t initialCapacity, const Allocator_t* alloc);
 
 void ArrayList_Destroy(ArrayList_t* list);
 

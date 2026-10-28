@@ -176,7 +176,7 @@ uint64_t Hash_Murmur3_u64(const void* key, size_t len, uint64_t seed)
 
 uint64_t __attribute__((weak)) Hash_GetSeed()
 {
-#if defined(TEST_ENV)
+#ifdef TEST_ENV
     return 0x123456789abcdef0ull;
 #else
     uint64_t seed = (uint64_t) (uintptr_t) &seed;

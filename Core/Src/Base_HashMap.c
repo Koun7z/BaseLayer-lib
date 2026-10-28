@@ -20,39 +20,42 @@ static inline HashMapEntry* get_last_in_bucket(HashMapEntry* entry)
     return entry;
 }
 
-static inline HashMapEntry* alloc_entry_aligned(size_t keySize,
-                                                size_t valueSize,
-                                                size_t keyAlignment,
-                                                size_t valueAlignment)
+static inline HashMapEntry* alloc_entry_aligned(size_t keySize, size_t valueSize, const KV_Allocator_t* alloc)
 {
     HashMapEntry* entry = NULL;
     size_t key_offset   = offsetof(HashMapEntry, data);
     size_t value_offset = offsetof(HashMapEntry, data) + keySize;
-    if(keyAlignment <= alignof(max_align_t) && valueAlignment <= alignof(max_align_t))
+    if(alloc->key_alignement <= alignof(max_align_t) && alloc->value_alignement <= alignof(max_align_t))
     {
         value_offset = Utils_AlignUp(value_offset, alignof(max_align_t));
 
-        entry = malloc(value_offset + valueSize);
+        entry = alloc->alloc(value_offset + valueSize);
     }
     else
     {
-        size_t base_alignment = alignof(max_align_t);
-        base_alignment        = Utils_Max(base_alignment, keyAlignment);
-        base_alignment        = Utils_Max(base_alignment, valueAlignment);
+        const size_t max_align = Utils_Max(alloc->key_alignement, alloc->value_alignement);
 
         // TODO: Overflow checks
         size_t size_end = offsetof(HashMapEntry, data);
-        size_end        = Utils_AlignUp(size_end, keyAlignment);
+        size_end        = Utils_AlignUp(size_end, alloc->key_alignement);
         key_offset      = size_end;
         size_end       += keySize;
 
-        size_end     = Utils_AlignUp(size_end, valueAlignment);
+        size_end     = Utils_AlignUp(size_end, alloc->value_alignement);
         value_offset = size_end;
         size_end    += valueSize;
 
-        size_t total_size = Utils_AlignUp(size_end, base_alignment);
+        // Allocate n * alignment bytes
+        const size_t total_size = Utils_AlignUp(size_end, max_align);
 
-        entry = aligned_alloc(base_alignment, total_size);
+        // Assume that the allocator will return a pointer aligned to alloc->alignement
+        entry = alloc->alloc(total_size);
+        assert(((uintptr_t) entry % max_align) == 0);
+    }
+
+    if(entry == NULL)
+    {
+        return NULL;
     }
 
     entry->next_in_bucket = NULL;
@@ -102,19 +105,18 @@ static inline HashMapEntry* replace_entry_data(HashMap_t* map,
     }
     else
     {
-        new_entry = alloc_entry_aligned(old_entry->_keySize, new_value_size, map->_key_alignment,
-                                        map->_value_alignment);
+        new_entry = alloc_entry_aligned(old_entry->_keySize, new_value_size, map->_kv_allocator);
         if(!new_entry)
         {
             return NULL;
         }
 
-        mempcpy(HashMapEntry_GetKey(new_entry), HashMapEntry_GetKey(old_entry), old_entry->_keySize);
-        mempcpy(HashMapEntry_GetValue(new_entry), new_data, new_value_size);
+        memcpy(HashMapEntry_GetKey(new_entry), HashMapEntry_GetKey(old_entry), old_entry->_keySize);
+        memcpy(HashMapEntry_GetValue(new_entry), new_data, new_value_size);
 
         new_entry->next_in_bucket = old_entry->next_in_bucket;
 
-        free(old_entry);
+        map->_bucket_allocator->free(old_entry);
     }
 
     return new_entry;
@@ -132,38 +134,62 @@ size_t HashMap_GetHash(const void* data, size_t size, const size_t seed[2])
 #endif
 }
 
-HashMap_t* HashMap_Create(size_t size, size_t keyAlignment, size_t valueAlignment)
+static int default_key_compare(const void* key1, size_t size1, const void* key2, size_t size2)
 {
-    assert((keyAlignment & (keyAlignment - 1)) == 0);
-    assert((valueAlignment & (valueAlignment - 1)) == 0);
+    if(size1 != size2)
+    {
+        return 1;
+    }
+
+    return memcmp(key1, key2, size1) != 0;
+}
+
+int HashMap_Init(HashMap_t* map, size_t size, const KV_Allocator_t* kv_alloc, const Allocator_t* bucket_alloc)
+{
+    assert(map);
+    assert(bucket_alloc);
+    assert(kv_alloc);
 
     size = Utils_NextPow2(Utils_Max(HASH_MAP_MIN_SIZE, size));
 
-    HashMap_t* map = malloc(sizeof(HashMap_t));
+    map->_buckets = calloc(size, sizeof(HashMapEntry*));
+    if(!map->_buckets)
+    {
+        return -1;
+    }
+
+    map->count             = 0;
+    map->head_entry        = NULL;
+    map->tail_entry        = NULL;
+    map->capacity          = size;
+    map->_max_load_actor   = HASH_MAP_DEFAULT_MAX_LOAD_FACTOR;
+    map->_min_load_factor  = HASH_MAP_DEFAULT_MIN_LOAD_FACTOR;
+    map->_bucket_allocator = bucket_alloc;
+    map->_kv_allocator     = kv_alloc;
+    map->_key_cmp_func     = default_key_compare;
+
+#if HASH_MAP_HASH_FUNCTION != 0
+    Hash_SipHash_Init(&map->_seed[0], &map->_seed[1]);
+#endif
+
+    return 0;
+}
+
+HashMap_t* HashMap_Create(size_t size, const KV_Allocator_t* kv_alloc, const Allocator_t* bucket_alloc)
+{
+    assert(bucket_alloc);
+
+    HashMap_t* map = bucket_alloc->alloc(sizeof(HashMap_t));
     if(!map)
     {
         return NULL;
     }
 
-    map->_buckets = calloc(size, sizeof(HashMapEntry*));
-    if(!map->_buckets)
+    if(HashMap_Init(map, size, kv_alloc, bucket_alloc) != 0)
     {
-        free(map);
+        bucket_alloc->free(map);
         return NULL;
     }
-
-    map->count            = 0;
-    map->head_entry       = NULL;
-    map->tail_entry       = NULL;
-    map->capacity         = size;
-    map->_max_load_actor  = HASH_MAP_DEFAULT_MAX_LOAD_FACTOR;
-    map->_min_load_factor = HASH_MAP_DEFAULT_MIN_LOAD_FACTOR;
-    map->_key_alignment   = keyAlignment;
-    map->_value_alignment = valueAlignment;
-
-#if HASH_MAP_HASH_FUNCTION != 0
-    Hash_SipHash_Init(&map->_seed[0], &map->_seed[1]);
-#endif
 
     return map;
 }
@@ -171,20 +197,21 @@ HashMap_t* HashMap_Create(size_t size, size_t keyAlignment, size_t valueAlignmen
 void HashMap_Destroy(HashMap_t* map)
 {
     assert(map);
+    assert(map->_bucket_allocator && map->_bucket_allocator->free);
 
     HashMapEntry* e = map->head_entry;
     while(e)
     {
         HashMapEntry* next = e->next_iter;
-        free(e);
+        map->_bucket_allocator->free(e);
         e = next;
     }
 
     if(map->_buckets)
     {
-        free(map->_buckets);
+        map->_bucket_allocator->free(map->_buckets);
     }
-    free(map);
+    map->_bucket_allocator->free(map);
 }
 
 HashMapEntry* HashMap_InsertFrom(HashMap_t* map, const void* key, size_t keySize, const void* value, size_t valueSize)
@@ -203,14 +230,14 @@ HashMapEntry* HashMap_InsertFrom(HashMap_t* map, const void* key, size_t keySize
 
     if(map->head_entry == NULL)
     {
-        HashMapEntry* entry = alloc_entry_aligned(keySize, valueSize, map->_key_alignment, map->_value_alignment);
+        HashMapEntry* entry = alloc_entry_aligned(keySize, valueSize, map->_kv_allocator);
         if(!entry)
         {
             return NULL;
         }
 
-        mempcpy(entry->data + entry->_keyOffset, key, keySize);
-        mempcpy(entry->data + entry->_valueOffset, value, valueSize);
+        memcpy(entry->data + entry->_keyOffset, key, keySize);
+        memcpy(entry->data + entry->_valueOffset, value, valueSize);
 
         map->head_entry           = entry;
         map->tail_entry           = entry;
@@ -223,14 +250,14 @@ HashMapEntry* HashMap_InsertFrom(HashMap_t* map, const void* key, size_t keySize
     HashMapEntry* bucket_head = map->_buckets[bucket_idx];
     if(bucket_head == NULL)
     {
-        HashMapEntry* entry = alloc_entry_aligned(keySize, valueSize, map->_key_alignment, map->_value_alignment);
+        HashMapEntry* entry = alloc_entry_aligned(keySize, valueSize, map->_kv_allocator);
         if(!entry)
         {
             return NULL;
         }
 
-        mempcpy(entry->data + entry->_keyOffset, key, keySize);
-        mempcpy(entry->data + entry->_valueOffset, value, valueSize);
+        memcpy(entry->data + entry->_keyOffset, key, keySize);
+        memcpy(entry->data + entry->_valueOffset, value, valueSize);
 
         update_tail_entry(map, entry);
         map->_buckets[bucket_idx] = entry;
@@ -241,7 +268,7 @@ HashMapEntry* HashMap_InsertFrom(HashMap_t* map, const void* key, size_t keySize
 
     HashMapEntry* e         = bucket_head;
     HashMapEntry* new_entry = NULL;
-    if(HashMapEntry_CompareKey(e, key, keySize) == 0)
+    if(map->_key_cmp_func(HashMapEntry_GetKey(e), e->_keySize, key, keySize) == 0)
     {
         new_entry = replace_entry_data(map, e, value, valueSize);
         if(new_entry)
@@ -252,7 +279,7 @@ HashMapEntry* HashMap_InsertFrom(HashMap_t* map, const void* key, size_t keySize
     }
     while(e->next_in_bucket)
     {
-        if(HashMapEntry_CompareKey(e->next_in_bucket, key, keySize) == 0)
+        if(map->_key_cmp_func(HashMapEntry_GetKey(e->next_in_bucket), e->next_in_bucket->_keySize, key, keySize) == 0)
         {
             new_entry = replace_entry_data(map, e->next_in_bucket, value, valueSize);
             if(new_entry)
@@ -265,7 +292,7 @@ HashMapEntry* HashMap_InsertFrom(HashMap_t* map, const void* key, size_t keySize
         e = e->next_in_bucket;
     }
 
-    new_entry = alloc_entry_aligned(keySize, valueSize, map->_key_alignment, map->_value_alignment);
+    new_entry = alloc_entry_aligned(keySize, valueSize, map->_kv_allocator);
     if(!new_entry)
     {
         return NULL;
@@ -332,7 +359,7 @@ HashMapEntry* HashMap_Find(const HashMap_t* map, const void* key, size_t keySize
     HashMapEntry* e = map->_buckets[bucket_idx];
     while(e)
     {
-        if(HashMapEntry_CompareKey(e, key, keySize) == 0)
+        if(map->_key_cmp_func(HashMapEntry_GetKey(e), e->_keySize, key, keySize) == 0)
         {
             return e;
         }
@@ -379,7 +406,7 @@ void HashMap_RemoveElement(HashMap_t* map, const void* key, size_t keySize)
         return;
     }
 
-    if(HashMapEntry_CompareKey(e, key, keySize) == 0)
+    if(map->_key_cmp_func(HashMapEntry_GetKey(e), e->_keySize, key, keySize) == 0)
     {
         map->_buckets[bucket_idx] = e->next_in_bucket;
         remove_from_iter(map, e);
@@ -390,7 +417,7 @@ void HashMap_RemoveElement(HashMap_t* map, const void* key, size_t keySize)
     }
     while(e->next_in_bucket)
     {
-        if(HashMapEntry_CompareKey(e->next_in_bucket, key, keySize) == 0)
+        if(map->_key_cmp_func(HashMapEntry_GetKey(e->next_in_bucket), e->next_in_bucket->_keySize, key, keySize) == 0)
         {
             HashMapEntry* to_remove = e->next_in_bucket;
             e->next_in_bucket       = to_remove->next_in_bucket;

@@ -15,8 +15,11 @@ START_TEST(Insertion_test)
         int a;
         float b;
     } test_struct_t;
-
-    HashMap_t* map = HashMap(char, test_struct_t, 16);
+#ifdef __GNUC__
+    HashMap_t* map = HashMap();
+#else
+    HashMap_t* map = HashMap(16);
+#endif
     ck_assert(map != NULL);
 
     char* keys[]           = {"never", "gonna", "give", "you", "up"};
@@ -49,7 +52,7 @@ START_TEST(Insertion_test)
 
 START_TEST(Resize_test)
 {
-    HashMap_t* map = HashMap(char, int, 16);
+    HashMap_t* map = HashMap(16);
     ck_assert(map != NULL);
 
     for(size_t i = 0; i < test_keys.count; i++)
@@ -75,7 +78,7 @@ START_TEST(Resize_test)
 
 START_TEST(Iteration_test)
 {
-    HashMap_t* map = HashMap(char, int, 16);
+    HashMap_t* map = HashMap(16);
     ck_assert(map != NULL);
 
     for(size_t i = 0; i < test_keys.count; i++)
@@ -133,7 +136,7 @@ static inline bool is_prime(size_t n)
 
 START_TEST(Removal_test)
 {
-    HashMap_t* map = HashMap(char, int, 16);
+    HashMap_t* map = HashMap(16);
     ck_assert(map != NULL);
 
     for(size_t i = 0; i < test_keys.count; i++)
@@ -183,6 +186,30 @@ START_TEST(Removal_test)
     HashMap_Destroy(map);
 }
 
+static void* alloc_align_64(size_t size)
+{
+    return aligned_alloc(64, size);
+}
+
+static void* alloc_align_512(size_t size)
+{
+    return aligned_alloc(512, size);
+}
+
+const KV_Allocator_t kv_alloc_64 = {
+    .alloc            = alloc_align_64,
+    .free             = free,
+    .key_alignement   = 64,
+    .value_alignement = 64,
+};
+
+const KV_Allocator_t kv_alloc_512 = {
+    .alloc            = alloc_align_512,
+    .free             = free,
+    .key_alignement   = 512,
+    .value_alignement = 512,
+};
+
 START_TEST(big_align_test)
 {
     typedef struct __attribute__((aligned(64)))
@@ -190,14 +217,14 @@ START_TEST(big_align_test)
         uint64_t data[8];
     } align64_t;
 
-    HashMap_t* map64 = HashMap(align64_t, align64_t, 16);
+    HashMap_t* map64 = HashMap(16, &kv_alloc_64);
     ck_assert(map64 != NULL);
 
     for(size_t i = 0; i < test_keys.count; i++)
     {
         void* key       = key_table_get(&test_keys, i);
         align64_t value = {
-            .data = {i, i, i, i, i, i, i, i}
+            .data = {i, i, i, i, i, i, i, i},
         };
         char big_key[64];
         for(size_t j = 0; j < 64; j++)
@@ -213,14 +240,14 @@ START_TEST(big_align_test)
         ck_assert((uint64_t) v % 64 == 0);
     }
 
-    HashMap_t* map512 = HashMap_Create(16, 512, 512);
+    HashMap_t* map512 = HashMap(16, &kv_alloc_512);
     ck_assert(map512 != NULL);
 
     for(size_t i = 0; i < test_keys.count; i++)
     {
         void* key       = key_table_get(&test_keys, i);
         align64_t value = {
-            .data = {i, i, i, i, i, i, i, i}
+            .data = {i, i, i, i, i, i, i, i},
         };
 
         HashMapEntry* e = HashMap_InsertFrom(map512, key, test_keys.key_size, &value, sizeof(align64_t));

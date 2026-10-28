@@ -6,60 +6,40 @@
 #include <stdlib.h>
 #include <string.h>
 
-static inline void* array_alloc(size_t size, size_t alignment)
+int ArrayList_Init(ArrayList_t* list, size_t elementSize, size_t initialCapacity, const Allocator_t* alloc)
 {
-    if(alignment <= alignof(max_align_t))
+    assert(list);
+    assert(alloc && alloc->alloc && alloc->free);
+
+    initialCapacity = Utils_Max(initialCapacity, ARRAY_LIST_DEFAULT_INITIAL_CAPACITY);
+
+    list->count         = 0;
+    list->capacity      = initialCapacity;
+    list->_element_size = elementSize;
+    list->_allocator    = alloc;
+    list->_data         = alloc->alloc(elementSize * initialCapacity);
+
+    if(list->_data == NULL)
     {
-        return malloc(size);
+        return -1;
     }
 
-    return aligned_alloc(alignment, Utils_AlignUp(size, alignment));
+    return 0;
 }
 
-static inline void* array_realloc(void* ptr, size_t old_size, size_t new_size, size_t alignment)
+ArrayList_t* ArrayList_Create(size_t elementSize, size_t initialCapacity, const Allocator_t* alloc)
 {
-    if(alignment <= alignof(max_align_t))
-    {
-        return realloc(ptr, new_size);
-    }
+    assert(alloc && alloc->alloc && alloc->free);
 
-    // No aligned_realloc :(
-    void* new_ptr = aligned_alloc(alignment, Utils_AlignUp(new_size, alignment));
-    if(new_ptr == NULL)
-    {
-        return NULL;
-    }
-
-    memcpy(new_ptr, ptr, Utils_Min(old_size, new_size));
-    free(ptr);
-
-    return new_ptr;
-}
-
-ArrayList_t* ArrayList_Create(size_t elementSize, size_t element_alignment, size_t initialCapacity)
-{
-    assert((element_alignment & (element_alignment - 1)) == 0);
-
-    ArrayList_t* list = (ArrayList_t*) malloc(sizeof(ArrayList_t));
+    ArrayList_t* list = (ArrayList_t*) alloc->alloc(sizeof(ArrayList_t));
     if(!list)
     {
         return NULL;
     }
 
-    if(initialCapacity == 0)
+    if(ArrayList_Init(list, elementSize, initialCapacity, alloc) != 0)
     {
-        initialCapacity = ARRAY_LIST_MIN_EXPAND_SIZE;
-    }
-
-    list->count              = 0;
-    list->capacity           = initialCapacity;
-    list->_element_size      = elementSize;
-    list->_element_alignment = element_alignment;
-    list->_data              = array_alloc(elementSize * initialCapacity, element_alignment);
-
-    if(list->_data == NULL)
-    {
-        free(list);
+        alloc->free(list);
         return NULL;
     }
 
@@ -68,10 +48,13 @@ ArrayList_t* ArrayList_Create(size_t elementSize, size_t element_alignment, size
 
 void ArrayList_Destroy(ArrayList_t* list)
 {
+    assert(list);
+    assert(list->_allocator && list->_allocator->free);
+
     if(list)
     {
-        free(list->_data);
-        free(list);
+        list->_allocator->free(list->_data);
+        list->_allocator->free(list);
     }
 }
 
@@ -82,8 +65,7 @@ static inline int expand_if_needed(ArrayList_t* list, size_t n)
         const size_t min_expand_size = Utils_Max(ARRAY_LIST_MIN_EXPAND_SIZE, n);
         const size_t new_capacity    = Utils_Max(list->capacity * 2, min_expand_size);
 
-        void* new_data = array_realloc(list->_data, list->capacity * list->_element_size,
-                                       new_capacity * list->_element_size, list->_element_alignment);
+        void* new_data = list->_allocator->realloc(list->_data, new_capacity * list->_element_size);
         if(new_data == NULL)
         {
             return -1;
@@ -100,8 +82,7 @@ int ArrayList_Realloc(ArrayList_t* list, size_t capacity)
     assert(list != NULL);
     assert(capacity > 0);
 
-    void* new_data = array_realloc(list->_data, list->capacity * list->_element_size, capacity * list->_element_size,
-                                   list->_element_alignment);
+    void* new_data = list->_allocator->realloc(list->_data, capacity * list->_element_size);
     if(new_data == NULL)
     {
         return -1;
@@ -113,14 +94,12 @@ int ArrayList_Realloc(ArrayList_t* list, size_t capacity)
     return 0;
 }
 
-
 int ArrayList_Reserve(ArrayList_t* list, size_t n)
 {
     assert(list != NULL);
     assert(n > 0);
 
-    void* new_data = array_realloc(list->_data, list->capacity * list->_element_size,
-                                   list->capacity + n * list->_element_size, list->_element_alignment);
+    void* new_data = list->_allocator->realloc(list->_data, list->capacity + n * list->_element_size);
     if(new_data == NULL)
     {
         return -1;
